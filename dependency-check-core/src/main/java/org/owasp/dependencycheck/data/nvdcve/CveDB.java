@@ -50,6 +50,7 @@ import org.owasp.dependencycheck.utils.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.apache.commons.collections.map.AbstractReferenceMap.HARD;
 import static org.apache.commons.collections.map.AbstractReferenceMap.SOFT;
 import static org.owasp.dependencycheck.data.nvdcve.CveDB.PreparedStatementCveDb.*;
@@ -63,6 +64,15 @@ import static org.owasp.dependencycheck.data.nvdcve.CveDB.PreparedStatementCveDb
  */
 @ThreadSafe
 public final class CveDB implements AutoCloseable {
+
+    private static long dur1;
+    private static long dur2;
+    private static long dur3;
+    private static long dur4;
+    private static long dur5;
+    private static long dur51;
+    private static long dur52;
+    private static long dur53;
 
     /**
      * Singleton instance of the CveDB.
@@ -261,6 +271,8 @@ public final class CveDB implements AutoCloseable {
         try {
             if (!instance.isOpen()) {
                 instance.connection = ConnectionFactory.getConnection();
+                instance.connection.setAutoCommit(true);
+                instance.connection.setTransactionIsolation(Connection.TRANSACTION_READ_UNCOMMITTED);
                 final String databaseProductName = determineDatabaseProductName(instance.connection);
                 instance.statementBundle = databaseProductName != null
                         ? ResourceBundle.getBundle("data/dbStatements", new Locale(databaseProductName))
@@ -268,9 +280,9 @@ public final class CveDB implements AutoCloseable {
                 instance.prepareStatements();
                 instance.databaseProperties = new DatabaseProperties(instance);
             }
-        } catch (DatabaseException e) {
+        } catch (DatabaseException | SQLException e) {
             releaseResources();
-            throw e;
+            throw new DatabaseException(e);
         }
     }
 
@@ -693,6 +705,7 @@ public final class CveDB implements AutoCloseable {
         clearCache();
         ResultSet rs = null;
         try {
+            final long start1 = System.currentTimeMillis();
             int vulnerabilityId = 0;
             final PreparedStatement selectVulnerabilityId = getPreparedStatement(SELECT_VULNERABILITY_ID);
             selectVulnerabilityId.setString(1, vuln.getName());
@@ -709,8 +722,10 @@ public final class CveDB implements AutoCloseable {
                 deleteSoftware.execute();
             }
             DBUtils.closeResultSet(rs);
+            dur1 += (System.currentTimeMillis() - start1);
 
             if (vulnerabilityId != 0) {
+                final long start2 = System.currentTimeMillis();
                 if (vuln.getDescription().contains("** REJECT **")) {
                     final PreparedStatement deleteVulnerability = getPreparedStatement(DELETE_VULNERABILITY);
                     deleteVulnerability.setInt(1, vulnerabilityId);
@@ -729,7 +744,11 @@ public final class CveDB implements AutoCloseable {
                     updateVulnerability.setInt(10, vulnerabilityId);
                     updateVulnerability.executeUpdate();
                 }
+                dur2 += (System.currentTimeMillis() - start2);
+
+
             } else {
+                final long start3 = System.currentTimeMillis();
                 final PreparedStatement insertVulnerability = getPreparedStatement(INSERT_VULNERABILITY);
                 insertVulnerability.setString(1, vuln.getName());
                 insertVulnerability.setString(2, vuln.getDescription());
@@ -752,8 +771,10 @@ public final class CveDB implements AutoCloseable {
                 } finally {
                     DBUtils.closeResultSet(rs);
                 }
+                dur3 += (System.currentTimeMillis() - start3);
             }
 
+            final long start4 = System.currentTimeMillis();
             final PreparedStatement insertReference = getPreparedStatement(INSERT_REFERENCE);
             for (Reference r : vuln.getReferences()) {
                 insertReference.setInt(1, vulnerabilityId);
@@ -762,9 +783,12 @@ public final class CveDB implements AutoCloseable {
                 insertReference.setString(4, r.getSource());
                 insertReference.execute();
             }
+            dur4 += (System.currentTimeMillis() - start4);
 
+            final long start5 = System.currentTimeMillis();
             final PreparedStatement insertSoftware = getPreparedStatement(INSERT_SOFTWARE);
             for (VulnerableSoftware s : vuln.getVulnerableSoftware()) {
+                final long start51 = System.currentTimeMillis();
                 int cpeProductId = 0;
                 final PreparedStatement selectCpeId = getPreparedStatement(SELECT_CPE_ID);
                 selectCpeId.setString(1, s.getName());
@@ -778,7 +802,9 @@ public final class CveDB implements AutoCloseable {
                 } finally {
                     DBUtils.closeResultSet(rs);
                 }
+                dur51 += (System.currentTimeMillis() - start51);
 
+                final long start52 = System.currentTimeMillis();
                 if (cpeProductId == 0) {
                     final PreparedStatement insertCpe = getPreparedStatement(INSERT_CPE);
                     insertCpe.setString(1, s.getName());
@@ -790,7 +816,9 @@ public final class CveDB implements AutoCloseable {
                 if (cpeProductId == 0) {
                     throw new DatabaseException("Unable to retrieve cpeProductId - no data returned");
                 }
+                dur52 += (System.currentTimeMillis() - start52);
 
+                final long start53 = System.currentTimeMillis();
                 insertSoftware.setInt(1, vulnerabilityId);
                 insertSoftware.setInt(2, cpeProductId);
 
@@ -809,8 +837,9 @@ public final class CveDB implements AutoCloseable {
                         throw ex;
                     }
                 }
-
+                dur53 += (System.currentTimeMillis() - start53);
             }
+            dur5 += (System.currentTimeMillis() - start5);
         } catch (SQLException ex) {
             final String msg = String.format("Error updating '%s'", vuln.getName());
             LOGGER.debug(msg, ex);
@@ -818,6 +847,11 @@ public final class CveDB implements AutoCloseable {
         } finally {
             DBUtils.closeResultSet(rs);
         }
+
+        LOGGER.info("1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 5_1: {}, 5_2: {}, 5_3: {}",
+                MILLISECONDS.toSeconds(dur1), MILLISECONDS.toSeconds(dur2), MILLISECONDS.toSeconds(dur3), MILLISECONDS.toSeconds(dur4),
+                MILLISECONDS.toSeconds(dur5), MILLISECONDS.toSeconds(dur51), MILLISECONDS.toSeconds(dur52), MILLISECONDS.toSeconds(dur53));
+
     }
 
     /**

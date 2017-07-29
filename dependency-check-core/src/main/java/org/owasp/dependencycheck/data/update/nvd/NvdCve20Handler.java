@@ -102,6 +102,7 @@ public class NvdCve20Handler extends DefaultHandler {
      * contain previous entries.
      */
     private Map<String, List<VulnerableSoftware>> prevVersionVulnMap;
+    private static long number = 1;
 
     /**
      * Get the value of totalNumberOfEntries.
@@ -281,6 +282,10 @@ public class NvdCve20Handler extends DefaultHandler {
         }
         if (cveDB != null) {
             cveDB.updateVulnerability(vuln);
+        }
+
+        if (number++ % 100 == 0) {
+            LOGGER.info("saved " + number);
         }
     }
 

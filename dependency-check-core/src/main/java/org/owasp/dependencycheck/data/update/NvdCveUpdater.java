@@ -69,7 +69,8 @@ public class NvdCveUpdater implements CachedWebDataSource {
     /**
      * The thread pool size to use for CPU-intense tasks.
      */
-    private static final int PROCESSING_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors();
+//    private static final int PROCESSING_THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors();
+    private static final int PROCESSING_THREAD_POOL_SIZE = 1;
     /**
      * The thread pool size to use when downloading files.
      */
@@ -316,7 +317,7 @@ public class NvdCveUpdater implements CachedWebDataSource {
             return;
         }
         if (maxUpdates > 3) {
-            LOGGER.info("NVD CVE requires several updates; this could take a couple of minutes.");
+            LOGGER.info("NVD CVE requires several uuuuupdates; this could take a couple of minutes.");
         }
 
         final Set<Future<Future<ProcessTask>>> downloadFutures = new HashSet<>(maxUpdates);
