@@ -223,14 +223,12 @@ public final class ConnectionFactory {
      */
     public static Connection getConnection() throws DatabaseException {
         initialize();
-        Connection conn = null;
         try {
-            conn = DriverManager.getConnection(connectionString, userName, password);
+            return DriverManager.getConnection(connectionString, userName, password);
         } catch (SQLException ex) {
             LOGGER.debug("", ex);
             throw new DatabaseException("Unable to connect to the database", ex);
         }
-        return conn;
     }
 
     /**
